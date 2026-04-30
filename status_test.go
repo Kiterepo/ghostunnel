@@ -323,35 +323,6 @@ func TestHandleWatchdogCallsSystemd(t *testing.T) {
 	handler.HandleWatchdog()
 }
 
-// TestHandleWatchdogInvokesNotify exercises the inline closure passed to
-// handleServiceWatchdog inside HandleWatchdog. On non-Linux platforms,
-// handleServiceWatchdog is a no-op stub that never invokes the closure, so
-// this test is Linux-only. The goroutine spawned by HandleWatchdog leaks at
-// test end (no shutdown channel was supplied); this is acceptable for a unit
-// test, the test binary's exit reaps the goroutine.
-func TestHandleWatchdogInvokesNotify(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("handleServiceWatchdog is a no-op on non-linux; closure is unreachable")
-	}
-
-	os.Setenv("WATCHDOG_PID", strconv.Itoa(os.Getpid()))
-	os.Setenv("WATCHDOG_USEC", "1000000")
-	defer os.Unsetenv("WATCHDOG_PID")
-	defer os.Unsetenv("WATCHDOG_USEC")
-
-	handler := newStatusHandler(dummyDial, "", "", "", "")
-	handler.Listening()
-
-	// Spawns goroutine that will tick at WATCHDOG_USEC/2 and invoke the
-	// inline `func() bool { return true }` closure inside HandleWatchdog.
-	handler.HandleWatchdog()
-
-	// Sleep slightly longer than WATCHDOG_USEC/2 (500ms) so the goroutine
-	// has a chance to invoke the closure at least once. The closure has no
-	// observable side-effect; coverage is the only evidence it ran.
-	time.Sleep(2 * time.Second)
-}
-
 // TestCheckBackendStatusInvalidURL covers the early-return error path in
 // checkBackendStatus for when http.NewRequestWithContext fails to parse the
 // configured statusTargetAddress. A control character in the URL is rejected

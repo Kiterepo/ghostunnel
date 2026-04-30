@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
+	"os/signal"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -98,6 +100,14 @@ func TestSignalHandlerReloadAndShutdown(t *testing.T) {
 	origExit := exitFunc
 	defer func() { exitFunc = origExit }()
 	exitFunc = func(int) {}
+
+	// Subscribe to SIGHUP at the test level before starting the goroutine.
+	// This neutralizes SIGHUP's default disposition (process termination) so
+	// that even if our SIGHUP races ahead of signalHandler's own
+	// signal.Notify call, the test process can't be killed by it.
+	guard := make(chan os.Signal, 1)
+	signal.Notify(guard, syscall.SIGHUP)
+	defer signal.Stop(guard)
 
 	src := &countingTLSConfigSource{}
 	sh := newStatusHandler(dummyDial, "test", "127.0.0.1:0", "127.0.0.1:0", "")
