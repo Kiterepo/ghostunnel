@@ -28,6 +28,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -263,6 +264,41 @@ func TestServeHTTPReturnsJSON(t *testing.T) {
 	}
 }
 
+func TestServeHTTPBackendUnhealthy(t *testing.T) {
+	handler := newStatusHandler(dummyDialError, "", "", "", "")
+	handler.Listening()
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status 503, got %d", response.Code)
+	}
+	if got := response.Header().Get("Content-Type"); got != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %q", got)
+	}
+
+	var resp statusResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response body: %v", err)
+	}
+	if resp.Ok {
+		t.Error("expected resp.Ok=false when backend dial fails")
+	}
+	if resp.BackendOk {
+		t.Error("expected resp.BackendOk=false when backend dial fails")
+	}
+	if resp.BackendStatus != "critical" {
+		t.Errorf("expected BackendStatus=critical, got %q", resp.BackendStatus)
+	}
+	if resp.BackendError == "" {
+		t.Error("expected non-empty BackendError describing dial failure")
+	}
+	if resp.Status != "critical" {
+		t.Errorf("expected top-level Status=critical, got %q", resp.Status)
+	}
+}
+
 func TestNonLinuxNotifyHelpersDoNotPanic(t *testing.T) {
 	if runtime.GOOS == "linux" {
 		t.Skip("Linux uses the real systemd implementation")
@@ -285,6 +321,22 @@ func TestHandleWatchdogCallsSystemd(t *testing.T) {
 	handler.Listening()
 	// HandleWatchdog should not panic regardless of platform
 	handler.HandleWatchdog()
+}
+
+// TestCheckBackendStatusInvalidURL covers the early-return error path in
+// checkBackendStatus for when http.NewRequestWithContext fails to parse the
+// configured statusTargetAddress. A control character in the URL is rejected
+// by net/url before any dial is attempted.
+func TestCheckBackendStatusInvalidURL(t *testing.T) {
+	handler := newStatusHandler(dummyDial, "", "", "", "http://\x7f/")
+
+	err := handler.checkBackendStatus(context.Background())
+	if err == nil {
+		t.Fatal("expected error from invalid statusTargetAddress")
+	}
+	if !strings.Contains(err.Error(), "invalid control character in URL") {
+		t.Errorf("error = %q, want it to mention parse failure", err.Error())
+	}
 }
 
 // statusTargetWithResponseStatusCode creates a stub status target that returns the status code specified by "code".
