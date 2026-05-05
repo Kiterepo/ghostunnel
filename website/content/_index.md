@@ -41,10 +41,9 @@ available under [Docs](/docs/).
 
 ## Supported Platforms
 
-Ghostunnel is developed primarily for Linux and macOS but runs on any UNIX
-system with `SO_REUSEPORT` (FreeBSD, OpenBSD, NetBSD). Windows is also
-supported, though without signal-based certificate reload (use
-`--timed-reload`), syslog, Landlock sandboxing, or socket activation.
+Ghostunnel is developed & tested on Linux, Apple macOS, and Windows but also
+runs on most other UNIX systems that are supported by Go such as FreeBSD,
+OpenBSD and NetBSD.
 
 ## License
 
