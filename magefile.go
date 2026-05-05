@@ -30,6 +30,7 @@ type Git mg.Namespace
 type Test mg.Namespace
 type Docker mg.Namespace
 type Website mg.Namespace
+type Github mg.Namespace
 
 var Default = Go.Build
 
@@ -246,6 +247,55 @@ func (Apple) Notarize(ctx context.Context, binary string) error {
 
 	printf("Notarization of %s completed successfully\n", binary)
 	return nil
+}
+
+// Publish creates a draft prerelease for the given tag and uploads
+// binaries to Github.
+//
+// Required environment:
+//   - GITHUB_TOKEN: token used by gh to authenticate
+//
+// Optional environment:
+//   - GITHUB_REF, GITHUB_SHA: included in release notes for traceability
+func (Github) Publish(ctx context.Context, tag string) error {
+	tag = strings.TrimPrefix(tag, "refs/tags/")
+	if tag == "" {
+		return fmt.Errorf("github:publish requires a tag argument")
+	}
+	if os.Getenv("GITHUB_TOKEN") == "" {
+		return fmt.Errorf("GITHUB_TOKEN must be set")
+	}
+
+	assets, err := filepath.Glob("dist/ghostunnel-*")
+	if err != nil {
+		return fmt.Errorf("failed to glob dist/: %w", err)
+	}
+	if len(assets) == 0 {
+		return fmt.Errorf("no release assets found in dist/")
+	}
+	sort.Strings(assets)
+
+	ref := os.Getenv("GITHUB_REF")
+	if ref == "" {
+		ref = "refs/tags/" + tag
+	}
+	notes := fmt.Sprintf("Release Build (from %s", ref)
+	if sha := os.Getenv("GITHUB_SHA"); sha != "" {
+		notes += "/" + sha
+	}
+	notes += ")"
+
+	args := []string{
+		"release", "create", tag,
+		"--draft",
+		"--prerelease",
+		"--title", "Release Build (Draft)",
+		"--notes", notes,
+	}
+	args = append(args, assets...)
+
+	printf("Creating draft release %s with %d asset(s)\n", tag, len(assets))
+	return sh.Run("gh", args...)
 }
 
 // setupCodesignKeychain creates a temporary keychain, imports the signing
