@@ -14,7 +14,7 @@
 // https://www.kernel.org/doc/html/latest/userspace-api/landlock.html.
 package syscall
 
-// Landlock file system access rights.
+// Landlock filesystem access rights.
 //
 // Please see the full documentation at
 // https://www.kernel.org/doc/html/latest/userspace-api/landlock.html#filesystem-flags.
@@ -63,6 +63,7 @@ const (
 	FlagRestrictSelfLogSameExecOff = 1 << iota
 	FlagRestrictSelfLogNewExecOn
 	FlagRestrictSelfLogSubdomainsOff
+	FlagRestrictSelfTSync
 )
 
 // RulesetAttr is the Landlock ruleset definition.
