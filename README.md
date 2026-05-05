@@ -15,12 +15,9 @@ a TCP domain/port or a UNIX domain socket. Ghostunnel in client mode accepts
 (insecure) connections through a TCP or UNIX domain socket and proxies them to
 a TLS-secured service.
 
-**Supported platforms**: Ghostunnel is developed primarily for Linux and macOS,
-although it should run on any UNIX system that exposes `SO_REUSEPORT`,
-including FreeBSD, OpenBSD and NetBSD. Ghostunnel also supports running on
-Windows, though without signal-based certificate reload (use `--timed-reload`
-instead), syslog output, Landlock sandboxing, and socket activation. See the
-[releases](releases/) directory for a full changelog.
+**Supported platforms**: Ghostunnel is developed & tested on Linux, Apple
+macOS, and Windows but also runs on most other UNIX systems that are supported
+by Go such as FreeBSD, OpenBSD and NetBSD.
 
 Key Features
 ============
