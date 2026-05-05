@@ -51,8 +51,8 @@ type Function struct {
 	Receiver   string
 	IsError    bool
 	IsContext  bool
-	Synopsis   string
-	Comment    string
+	Synopsis   string // Synopsis is a one sentence description of the function, without its leading function name.
+	Comment    string // Comment is the full comment on the function, with newlines replaced by spaces and trimmed.
 	Args       []Arg
 }
 
@@ -241,34 +241,34 @@ func (f Function) ExecCode() string {
 			x++`, x)
 		case "int":
 			_, _ = fmt.Fprintf(&parseargs, `
-				arg%d, err := strconv.Atoi(args.Args[x])
+				arg%d, err := _strconv.Atoi(args.Args[x])
 				if err != nil {
 					logger.Printf("can't convert argument %%q to int\n", args.Args[x])
-					os.Exit(2)
+					_os.Exit(2)
 				}
 				x++`, x)
 		case "float64":
 			_, _ = fmt.Fprintf(&parseargs, `
-				arg%d, err := strconv.ParseFloat(args.Args[x], 64)
+				arg%d, err := _strconv.ParseFloat(args.Args[x], 64)
 				if err != nil {
 					logger.Printf("can't convert argument %%q to float64\n", args.Args[x])
-					os.Exit(2)
+					_os.Exit(2)
 				}
 				x++`, x)
 		case "bool":
 			_, _ = fmt.Fprintf(&parseargs, `
-				arg%d, err := strconv.ParseBool(args.Args[x])
+				arg%d, err := _strconv.ParseBool(args.Args[x])
 				if err != nil {
 					logger.Printf("can't convert argument %%q to bool\n", args.Args[x])
-					os.Exit(2)
+					_os.Exit(2)
 				}
 				x++`, x)
 		case "time.Duration":
 			_, _ = fmt.Fprintf(&parseargs, `
-				arg%d, err := time.ParseDuration(args.Args[x])
+				arg%d, err := _time.ParseDuration(args.Args[x])
 				if err != nil {
 					logger.Printf("can't convert argument %%q to time.Duration\n", args.Args[x])
-					os.Exit(2)
+					_os.Exit(2)
 				}
 				x++`, x)
 		default:
@@ -282,7 +282,7 @@ func (f Function) ExecCode() string {
 			continue
 		}
 		_, _ = fmt.Fprintf(&parseargs, `
-				var arg%d *%s`, x, arg.Type)
+				var arg%d *%s`, x, genType(arg.Type))
 	}
 
 	// Phase 3: Parse optional arguments from -name=value flags
@@ -312,7 +312,7 @@ func (f Function) ExecCode() string {
 		_, _ = fmt.Fprintf(&parseargs, `
 						default:
 							logger.Printf("invalid option %%q for target \"%s\", expected -name=value format\n", _optArg)
-							os.Exit(2)
+							_os.Exit(2)
 						}
 					} else {
 						_optName = _strings.ToLower(_optArg[1:_eqIdx])
@@ -333,37 +333,37 @@ func (f Function) ExecCode() string {
 			case "int":
 				_, _ = fmt.Fprintf(&parseargs, `
 					case %q:
-						_tmp%d, err := strconv.Atoi(_optVal)
+						_tmp%d, err := _strconv.Atoi(_optVal)
 						if err != nil {
 							logger.Printf("can't convert option %%q value %%q to int\n", _optName, _optVal)
-							os.Exit(2)
+							_os.Exit(2)
 						}
 						arg%d = &_tmp%d`, lowerName, x, x, x)
 			case "float64":
 				_, _ = fmt.Fprintf(&parseargs, `
 					case %q:
-						_tmp%d, err := strconv.ParseFloat(_optVal, 64)
+						_tmp%d, err := _strconv.ParseFloat(_optVal, 64)
 						if err != nil {
 							logger.Printf("can't convert option %%q value %%q to float64\n", _optName, _optVal)
-							os.Exit(2)
+							_os.Exit(2)
 						}
 						arg%d = &_tmp%d`, lowerName, x, x, x)
 			case "bool":
 				_, _ = fmt.Fprintf(&parseargs, `
 					case %q:
-						_tmp%d, err := strconv.ParseBool(_optVal)
+						_tmp%d, err := _strconv.ParseBool(_optVal)
 						if err != nil {
 							logger.Printf("can't convert option %%q value %%q to bool\n", _optName, _optVal)
-							os.Exit(2)
+							_os.Exit(2)
 						}
 						arg%d = &_tmp%d`, lowerName, x, x, x)
 			case "time.Duration":
 				_, _ = fmt.Fprintf(&parseargs, `
 					case %q:
-						_tmp%d, err := time.ParseDuration(_optVal)
+						_tmp%d, err := _time.ParseDuration(_optVal)
 						if err != nil {
 							logger.Printf("can't convert option %%q value %%q to time.Duration\n", _optName, _optVal)
-							os.Exit(2)
+							_os.Exit(2)
 						}
 						arg%d = &_tmp%d`, lowerName, x, x, x)
 			default:
@@ -373,14 +373,14 @@ func (f Function) ExecCode() string {
 		_, _ = fmt.Fprintf(&parseargs, `
 					default:
 						logger.Printf("unknown option %%q for target \"%s\"\n", _optName)
-						os.Exit(2)
+						_os.Exit(2)
 					}
 					x++
 				}`, f.TargetName())
 	}
 
 	out := parseargs.String() + `
-				wrapFn := func(ctx context.Context) error {
+				wrapFn := func(ctx _context.Context) error {
 					`
 	if f.IsError {
 		out += "return "
@@ -504,7 +504,7 @@ func Package(path string, files []string, multiline bool) (*PkgInfo, error) {
 	if multiline {
 		pi.Description = strings.TrimSuffix(p.Doc, "\n")
 	} else {
-		pi.Description = toOneLine(p.Doc)
+		pi.Description = oneLineDoc(p.Doc)
 	}
 
 	setNamespaces(pi, fieldComments)
@@ -645,7 +645,7 @@ func funcFromDoc(f *doc.Func, importpath, funcname string, multiline bool, field
 	if multiline {
 		fn.Comment = strings.TrimSuffix(f.Doc, "\n")
 	} else {
-		fn.Comment = toOneLine(f.Doc)
+		fn.Comment = oneLineDoc(f.Doc)
 	}
 	fn.Synopsis = sanitizeSynopsis(f)
 	return fn, true
@@ -810,6 +810,7 @@ func checkDupeTargets(info *PkgInfo) (hasDupes bool, names map[string][]string) 
 // sanitizeSynopsis sanitizes function Doc to create a summary.
 func sanitizeSynopsis(f *doc.Func) string {
 	synopsis := doc.Synopsis(f.Doc)
+	synopsis = sanitizeDocComment(synopsis)
 
 	// If the synopsis begins with the function name, remove it. This is done to
 	// not repeat the text.
@@ -817,8 +818,12 @@ func sanitizeSynopsis(f *doc.Func) string {
 	// clean	Clean removes the temporarily generated files
 	// To:
 	// clean 	removes the temporarily generated files
-	if syns := strings.Split(synopsis, " "); strings.EqualFold(f.Name, syns[0]) {
-		return strings.Join(syns[1:], " ")
+	start, rest, found := strings.Cut(synopsis, " ")
+	if !found {
+		return synopsis
+	}
+	if strings.EqualFold(f.Name, start) {
+		return rest
 	}
 
 	return synopsis
@@ -1111,8 +1116,18 @@ func funcType(ft *ast.FuncType, fieldComments map[*ast.Field]string) (*Function,
 	return f, nil
 }
 
-func toOneLine(s string) string {
-	return strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
+// sanitizeDocComment sanitizes a doc comment by replacing characters that would screw up formatting
+// in the output file.
+func sanitizeDocComment(s string) string {
+	s = strings.ReplaceAll(s, "`", "'")
+	return s
+}
+
+// oneLineDoc converts a doc comment to a single line, and sanitizes it for output.
+func oneLineDoc(s string) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.TrimSpace(s)
+	return sanitizeDocComment(s)
 }
 
 // hasComment reports whether any file in the package contains a comment
@@ -1137,4 +1152,12 @@ var argTypes = map[string]string{
 	"float64":          "float64",
 	"&{time Duration}": "time.Duration",
 	"bool":             "bool",
+}
+
+// genType converts a logical type name to the type name used in generated code.
+func genType(typ string) string {
+	if typ == "time.Duration" {
+		return "_time.Duration"
+	}
+	return typ
 }

@@ -1,16 +1,16 @@
-// Package landlock restricts a Go program's ability to use files and networking.
+// Package landlock enforces sandboxing policies using Linux's Landlock LSM.
 //
 // # Restricting file access
 //
 // The following invocation will restrict all goroutines so that they
 // can only read from /usr, /bin and /tmp, and only write to /tmp:
 //
-//	err := landlock.V6.BestEffort().RestrictPaths(
+//	err := landlock.V8.BestEffort().RestrictPaths(
 //	    landlock.RODirs("/usr", "/bin"),
 //	    landlock.RWDirs("/tmp"),
 //	)
 //
-// This will restrict file access using Landlock V6, if available. If
+// This will restrict file access using Landlock V8, if available. If
 // unavailable, it will attempt using earlier Landlock versions than
 // the one requested. If no Landlock version is available, it will
 // still succeed, without restricting file accesses.
@@ -20,19 +20,28 @@
 // The following invocation will restrict all goroutines so that they
 // can only bind to TCP port 8080 and only connect to TCP port 53:
 //
-//	err := landlock.V6.BestEffort().RestrictNet(
+//	err := landlock.V8.BestEffort().RestrictNet(
 //	    landlock.BindTCP(8080),
 //	    landlock.ConnectTCP(53),
 //	)
 //
 // This functionality is available since Landlock V4.
 //
+// **IMPORTANT:** Landlock's TCP restrictions only apply to "classic"
+// TCP sockets, not to Multipath TCP sockets, which can also serve
+// non-multipath clients.  Since Go 1.24, Multipath TCP is the default
+// for [net.Listen], and therefore, [net.Listen] can not be restricted
+// with Landlock.
+//
+// The bug needs to be fixed in the Linux kernel and is tracked here:
+// https://github.com/landlock-lsm/linux/issues/54
+//
 // # Restricting IPC scopes
 //
 // The following invocation will restrict IPC to more privileged
 // Landlock domains, if possible:
 //
-//	err := landlock.V6.BestEffort().RestrictScoped()
+//	err := landlock.V8.BestEffort().RestrictScoped()
 //
 // This functionality is available since Landlock V6.
 //
@@ -43,7 +52,7 @@
 // [Config.RestrictNet] and [Config.RestrictScoped] one after another,
 // but it happens in one step.
 //
-//	err := landlock.V6.BestEffort().Restrict(
+//	err := landlock.V8.BestEffort().Restrict(
 //	    landlock.RODirs("/usr", "/bin"),
 //	    landlock.RWDirs("/tmp"),
 //	    landlock.BindTCP(8080),
@@ -52,20 +61,31 @@
 //
 // # More possible invocations
 //
-// landlock.V6.RestrictPaths(...) (without the call to
+// landlock.V8.RestrictPaths(...) (without the call to
 // [Config.BestEffort]) enforces the given rules using the
-// capabilities of Landlock V6, but returns an error if that
+// capabilities of Landlock V8, but returns an error if that
 // functionality is not available on the system that the program is
 // running on.
+//
+// If Audit logging is enabled in the Linux kernel, kernels with
+// Landlock ABI V7 and higher will log Landlock denials to the audit
+// log.  By default, this only happens for denials affecting the same
+// process which enforced the policy, and it also happens for nested
+// Landlock policies.
+//
+// The situations in which audit logging happens can be configured
+// using [Config.DisableLoggingForOriginatingProcess],
+// [Config.EnableLoggingForSubprocesses] and
+// [Config.DisableLoggingForSubdomains].
 //
 // # Landlock ABI versioning
 //
 // The Landlock ABI is versioned, so that callers can probe for the
 // availability of different Landlock features.
 //
-// When using the Go Landlock package, callers need to identify at
+// When using the Go-Landlock package, callers need to identify at
 // which ABI level they want to use Landlock and call one of the
-// restriction methods (e.g. [Config.RestrictPaths]) on the
+// restriction methods (e.g., [Config.RestrictPaths]) on the
 // corresponding ABI constant.
 //
 // When new Landlock versions become available in landlock, users will
@@ -73,23 +93,27 @@
 // as there is a risk that new Landlock versions will break operations
 // that their programs rely on.
 //
+// The documentation for [landlock.V8] and the adjacent version
+// numbers explains what you need to look for when upgrading between
+// Landlock ABI versions.
+//
 // # Graceful degradation on older kernels
 //
 // Programs that get run on different kernel versions will want to use
 // the [Config.BestEffort] method to gracefully degrade to using the
 // best available Landlock version on the current kernel.
 //
-// In this case, the Go Landlock library will enforce as much as
+// In this case, the Go-Landlock library will enforce as much as
 // possible, but it will ensure that all the requested access rights
 // are permitted after Landlock enforcement.
 //
-// # Current limitations (File System)
+// # Current limitations (Filesystem)
 //
-// Landlock can not currently restrict all file system operations.
+// Landlock can not currently restrict all filesystem operations.
 // The operations that can and can not be restricted yet are listed in
 // the [Kernel Documentation about Access Rights].
 //
-// Enabling Landlock implicitly turns off the following file system
+// Enabling Landlock implicitly turns off the following filesystem
 // features:
 //
 //   - File reparenting: renaming or linking a file to a different parent directory is denied,
@@ -102,29 +126,19 @@
 // versions. See the [Kernel Documentation about Current Limitations]
 // for more details.
 //
-// # Current Limitations (IPC within the same Go program)
-//
-// For a Go process which restricts Landlock "scoped" IPC operations
-// for itself, goroutines within this process might be inconsistently
-// permitted or denied to use these IPC mechanisms among themselves.
-//
-// This is because different OS threads within the Go process may
-// technically belong to different Landlock domains (even if these
-// domains enforce the same policies).
-//
 // # Multithreading Limitations
 //
 // This warning only applies to programs using cgo and linking C
 // libraries that start OS threads through means other than
 // pthread_create() before landlock is called:
 //
-// When using cgo, the landlock package relies on libpsx in order to
-// apply the rules across all OS threads, (rather than just the ones
-// managed by the Go runtime). psx achieves this by wrapping the
-// C-level phtread_create() API which is very commonly used on Unix to
-// start threads. However, C libraries calling clone(2) through other
-// means before landlock is called might still create threads that
-// won't have Landlock protections.
+// Before Landlock ABI V8, when using cgo, the landlock package relies
+// on libpsx in order to apply the rules across all OS threads,
+// (rather than just the ones managed by the Go runtime).  psx
+// achieves this by wrapping the C-level pthread_create() API which is
+// very commonly used on UNIX to start threads. However, C libraries
+// calling clone(2) through other means before landlock is called
+// might still create threads that won't have Landlock protections.
 //
 // [Kernel Documentation about Access Rights]: https://www.kernel.org/doc/html/latest/userspace-api/landlock.html#access-rights
 // [Kernel Documentation about Current Limitations]: https://www.kernel.org/doc/html/latest/userspace-api/landlock.html#current-limitations
