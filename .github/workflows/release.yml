@@ -163,4 +163,4 @@ jobs:
       - name: Create draft release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: go tool mage -v release:publish ${{ github.ref_name }}
+        run: go tool mage -v github:publish ${{ github.ref_name }}
