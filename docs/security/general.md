@@ -1,64 +1,29 @@
 ---
-title: Landlock & TLS
+title: General
 description: Landlock sandboxing, TLS protocol settings, cipher suites, address restrictions.
 weight: 10
 ---
 
-Ghostunnel's TLS settings and Landlock sandboxing.
+Ghostunnel's TLS settings, address restrictions, and Landlock sandboxing.
 
-## TLS Configuration
+## TLS Settings
 
-Ghostunnel enforces a minimum TLS version of **TLS 1.2**. Earlier versions are
-not supported. TLS 1.3 is supported and will be negotiated when both sides
-support it.
+Ghostunnel enforces a minimum TLS version of TLS 1.2, and TLS 1.3 is supported
+and will be negotiated when both sides support it. Earlier versions of TLS are
+not supported.
 
 ### Cipher Suites
 
-The following cipher suites are enabled by default, in order of preference:
-
-**AES-GCM:**
-- `TLS_AES_128_GCM_SHA256` (TLS 1.3)
-- `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256`
-- `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256`
-- `TLS_AES_256_GCM_SHA384` (TLS 1.3)
-- `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384`
-- `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384`
-
-**ChaCha20-Poly1305:**
-- `TLS_CHACHA20_POLY1305_SHA256` (TLS 1.3)
-- `TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305`
-- `TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305`
-
-All suites use authenticated encryption (AEAD). CBC-mode ciphers are not
-enabled. ECDSA suites are listed before RSA to prefer ECDSA when both
-certificate types are available.
-
-To check which cipher suite and protocol version were negotiated for a
-connection:
-
-```bash
-openssl s_client -connect localhost:8443 \
-    -cert client-cert.pem -key client-key.pem -CAfile cacert.pem \
-    </dev/null 2>/dev/null | grep -E 'Protocol|Cipher'
-```
-
 In TLS 1.3, cipher suite selection is handled by Go's [`crypto/tls`][crypto-tls]
 and cannot be configured by the application. The TLS 1.3 suites listed above are always
-available when TLS 1.3 is negotiated. The configurable cipher suite list only
-affects TLS 1.2 connections.
-
-### Curve Preferences
-
-In server mode, key exchange prefers the following elliptic curves:
-
-1. **X25519**: fast, constant-time, widely supported
-2. **P-256 (secp256r1)**: hardware-accelerated on most platforms
+available when TLS 1.3 is negotiated. For TLS 1.2, the configured cipher suites
+all use authenticated encryption (AEAD). Older CBC-mode ciphers are not enabled.
 
 ### Client Authentication
 
 In server mode, Ghostunnel requires and verifies client certificates by
-default (`RequireAndVerifyClientCert`). This can be disabled with
-`--disable-authentication`, in which case no client certificate is requested.
+default. This can be disabled with `--disable-authentication`, in which case no
+client certificate is requested.
 
 The status port (`--status`) is optional and does not require client
 certificates. It is typically consumed by monitoring systems that may not
@@ -95,6 +60,34 @@ The `--listen` address must be one of:
 To accept connections from remote hosts, pass `--unsafe-listen`. The listen
 side of client mode accepts plaintext connections, so exposing it beyond
 localhost risks unauthorized access to the proxied service.
+
+### Restricting to specific local users
+
+Binding to `localhost` (or `127.0.0.1` / `[::1]`) blocks the network, but on a
+shared host any local user can still connect to the port. If you need to
+restrict access to a specific UID (for example, only `root` may reach the
+plaintext side of a tunnel), bind to a UNIX domain socket and use
+filesystem permissions:
+
+```bash
+ghostunnel client \
+    --listen=unix:/var/run/ghostunnel/client.sock \
+    --target=backend.example.com:8443 \
+    ...
+```
+
+Set the socket's owner and mode so only the intended user can `connect(2)` to
+it. With socket activation, the service manager creates the socket and applies
+the permissions for you; see [Systemd]({{< ref "systemd.md" >}}) and
+[Launchd]({{< ref "launchd.md" >}}). Otherwise, ensure the socket's parent
+directory is `chmod 0700` and `chown` it to the intended user, since the path
+must be traversable to connect.
+
+Firewall-based UID filtering exists but is fragile. On Linux, `iptables`
+supports `-m owner --uid-owner` and `nftables` supports `skuid`. On macOS, `pf`
+accepts `user =` rules, but Apple has formally stated that `pf` is not a stable
+API; see [TN3165: Packet Filter is not API][tn3165]. Prefer UNIX socket
+permissions, which are kernel-enforced via VFS and survive OS upgrades.
 
 ## Landlock sandboxing
 
@@ -133,3 +126,4 @@ libraries that may require access to arbitrary files and sockets.
 
 [crypto-tls]: https://pkg.go.dev/crypto/tls
 [landlock]: https://docs.kernel.org/userspace-api/landlock.html
+[tn3165]: https://developer.apple.com/documentation/technotes/tn3165-packet-filter-is-not-api

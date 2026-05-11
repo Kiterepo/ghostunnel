@@ -140,6 +140,27 @@ The `FileDescriptorName` in `ghostunnel.socket` must match the name passed to
 `--listen`. If multiple sockets are needed (e.g. for a status port), use the
 name to distinguish them.
 
+### UNIX Socket Variant
+
+To restrict access to a specific local user (see
+[Security]({{< ref "../security/general.md#restricting-to-specific-local-users" >}})),
+have systemd create a UNIX domain socket with the desired ownership and mode
+instead of binding to TCP:
+
+```ini
+[Socket]
+FileDescriptorName=ghostunnel
+ListenStream=/run/ghostunnel.sock
+SocketUser=root
+SocketGroup=root
+SocketMode=0600
+```
+
+systemd applies `SocketUser`/`SocketGroup`/`SocketMode` at socket creation
+time, so only the intended user can `connect(2)` to it; no firewall rules
+required. See [systemd.socket(5)][systemd-socket] for the full list of
+options.
+
 ### Installing
 
 ```bash
@@ -162,10 +183,13 @@ the privileges it needs:
 
 ```ini
 [Service]
-# Run as a dedicated unprivileged user
+# Dedicated unprivileged user. Use User=ghostunnel if you need persistent
+# state or specific file ownership instead.
 DynamicUser=yes
 
-# Filesystem restrictions
+# Filesystem: system becomes read-only outside /dev, /proc, /sys. Ghostunnel
+# only reads certs, so any cert path remains accessible regardless of where
+# it lives.
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
@@ -176,11 +200,11 @@ ProtectKernelLogs=yes
 ProtectControlGroups=yes
 ProtectProc=invisible
 
-# Network: only allow AF_INET/AF_INET6 (and AF_UNIX for syslog/notify)
+# Network: only allow AF_INET/AF_INET6/AF_UNIX
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 
-# Capabilities: drop everything, Ghostunnel doesn't need any
-# (use socket activation or listen on ports > 1024)
+# Capabilities: drop everything. Add CAP_NET_BIND_SERVICE if binding to a
+# privileged port (< 1024) without socket activation.
 CapabilityBoundingSet=
 NoNewPrivileges=yes
 
@@ -196,23 +220,8 @@ RemoveIPC=yes
 UMask=0077
 ```
 
-### Notes
-
-* **`DynamicUser=yes`** allocates a transient user at runtime. If you need
-  persistent state or specific file ownership, use a static `User=ghostunnel`
-  instead.
-* **`CapabilityBoundingSet=`** (empty) drops all capabilities. If you need to
-  bind to a privileged port (< 1024) without socket activation, add
-  `CAP_NET_BIND_SERVICE` instead.
-* **`ProtectSystem=strict`** makes the entire filesystem read-only except
-  `/dev`, `/proc`, and `/sys`. Ghostunnel only needs to read certificate
-  files, so this is safe. If your certificates live outside the default
-  paths, no extra configuration is needed — they are already readable.
-* These settings work alongside Ghostunnel's own Landlock sandboxing
-  (enabled by default on Linux). The two layers are complementary — systemd
-  restricts at the process level, Landlock restricts within the process.
-* Run `systemd-analyze security ghostunnel.service` to audit the effective
-  security posture of your unit file.
+Run `systemd-analyze security ghostunnel.service` to audit the effective
+security posture of your unit file.
 
 [sd-notify]: https://www.freedesktop.org/software/systemd/man/latest/sd_notify.html
 [systemd-service]: https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html
