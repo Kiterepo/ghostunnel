@@ -1,5 +1,5 @@
 ---
-title: General
+title: General Security
 description: Landlock sandboxing, TLS protocol settings, cipher suites, address restrictions.
 weight: 10
 ---

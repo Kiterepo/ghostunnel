@@ -143,7 +143,7 @@ name to distinguish them.
 ### UNIX Socket Variant
 
 To restrict access to a specific local user (see
-[Security]({{< ref "../security/general.md#restricting-to-specific-local-users" >}})),
+[Security]({{< ref "general.md#restricting-to-specific-local-users" >}})),
 have systemd create a UNIX domain socket with the desired ownership and mode
 instead of binding to TCP:
 
