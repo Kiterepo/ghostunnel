@@ -82,6 +82,40 @@ Both `SockType` and `SockFamily` must be defined for each socket. If the
 family is omitted, launchd opens two sockets (IPv4 and IPv6) for each key,
 which Ghostunnel does not currently support.
 
+## UNIX Socket Activation
+
+To restrict access to a specific local user (see
+[Security]({{< ref "general.md#restricting-to-specific-local-users" >}})),
+have launchd create a UNIX domain socket with the desired ownership and mode
+instead of binding to TCP:
+
+```xml
+<key>Sockets</key>
+<dict>
+  <key>Listener</key>
+  <dict>
+    <key>SockPathName</key>
+    <string>/var/run/ghostunnel.sock</string>
+    <key>SockPathMode</key>
+    <integer>384</integer>
+    <key>SockPathOwner</key>
+    <integer>0</integer>
+    <key>SockPathGroup</key>
+    <integer>0</integer>
+    <key>SockType</key>
+    <string>stream</string>
+  </dict>
+</dict>
+```
+
+`SockPathMode` is a **decimal** integer in plist XML, not octal. `384` is
+`0600` (owner read/write only); `416` is `0640`; `432` is `0660`. Combined
+with `SockPathOwner`/`SockPathGroup`, this lets launchd enforce per-user
+access at socket creation time, without any firewall rules.
+
+The full list of `Sockets` keys is documented in `launchd.plist(5)`
+(`man launchd.plist`).
+
 ## Installing
 
 ```bash
