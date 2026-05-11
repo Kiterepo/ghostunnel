@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-linux:
@@ -143,83 +143,24 @@ jobs:
 
   release:
     name: Create release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [ build-linux, build-darwin, build-windows ]
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
-          fetch-depth: 0
-      - name: Create release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: "Release Build (Draft)"
-          body: "Release Build (from ${{ github.ref }}/${{ github.sha }})"
-          draft: true
-          prerelease: true
-
-  add-assets-linux-darwin:
-    name: Add assets for Linux/Darwin
-    runs-on: ubuntu-22.04
-    needs: [ build-linux, build-darwin, release ]
-    strategy:
-      matrix:
-        target:
-        - { os: 'linux', arch: 'amd64' }
-        - { os: 'linux', arch: 'arm64' }
-        - { os: 'darwin', arch: 'amd64' }
-        - { os: 'darwin', arch: 'arm64' }
-        - { os: 'darwin', arch: 'universal' }
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Download artifact
+          go-version: '1.26.x'
+          cache: false
+      - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
-          name: ghostunnel-${{ matrix.target.os }}-${{ matrix.target.arch }}
           path: dist
-      - name: Upload artifact to release
-        uses: actions/upload-release-asset@v1
+          merge-multiple: true
+      - name: Create draft release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: ./dist/ghostunnel-${{ matrix.target.os }}-${{ matrix.target.arch }}
-          asset_name: ghostunnel-${{ matrix.target.os }}-${{ matrix.target.arch }}
-          asset_content_type: application/octet-stream
-
-  add-assets-windows:
-    name: Add assets for Windows
-    runs-on: ubuntu-22.04
-    needs: [ build-windows, release ]
-    strategy:
-      matrix:
-        target:
-        - { os: 'windows', arch: 'amd64' }
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Download artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: ghostunnel-${{ matrix.target.os }}-${{ matrix.target.arch }}.exe
-          path: dist
-      - name: Upload artifact to release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: ./dist/ghostunnel-${{ matrix.target.os }}-${{ matrix.target.arch }}.exe
-          asset_name: ghostunnel-${{ matrix.target.os }}-${{ matrix.target.arch }}.exe
-          asset_content_type: application/octet-stream
+        run: go tool mage -v github:publish ${{ github.ref_name }}
