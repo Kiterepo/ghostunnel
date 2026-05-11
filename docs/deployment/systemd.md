@@ -187,9 +187,11 @@ the privileges it needs:
 # state or specific file ownership instead.
 DynamicUser=yes
 
-# Filesystem: system becomes read-only outside /dev, /proc, /sys. Ghostunnel
-# only reads certs, so any cert path remains accessible regardless of where
-# it lives.
+# Filesystem: most of the system becomes read-only outside /dev, /proc, /sys.
+# Ghostunnel only needs read access to certs, which still works from standard
+# readable locations such as /etc. Note that ProtectHome=yes makes /home and
+# /root inaccessible, so certs should not be stored there unless you relax
+# ProtectHome or add an explicit exception with ReadOnlyPaths=.
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
