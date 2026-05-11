@@ -15,9 +15,9 @@ not supported.
 ### Cipher Suites
 
 In TLS 1.3, cipher suite selection is handled by Go's [`crypto/tls`][crypto-tls]
-and cannot be configured by the application. The TLS 1.3 suites listed above are always
-available when TLS 1.3 is negotiated. For TLS 1.2, the configured cipher suites
-all use authenticated encryption (AEAD). Older CBC-mode ciphers are not enabled.
+and cannot be configured by the application. For TLS 1.2, the configured cipher
+suites all use authenticated encryption (AEAD). Older CBC-mode ciphers are not
+enabled.
 
 ### Client Authentication
 
