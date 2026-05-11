@@ -172,11 +172,9 @@ func setupLandlock() error {
 		}
 	}
 
-	// Print landlock errors, but continue running. Landlock is a relatively new
-	// feature and not supported on older kernels (net rules were added in v6.7,
-	// Jan 2024). We may change this in a future version of Ghostunnel as we get
-	// more comfortable with Landlock.
-	config := landlock.V4
+	// Enable best-effort mode: If the kernel doesn't support ABI v8, then go-landlock
+	// will enforce as much as possible given the ABI version that *is* available.
+	config := landlock.V8.BestEffort()
 	err := config.RestrictPaths(fsRules...)
 	if err != nil {
 		return err
