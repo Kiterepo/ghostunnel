@@ -23,12 +23,12 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/landlock-lsm/go-landlock/landlock"
+	llsys "github.com/landlock-lsm/go-landlock/landlock/syscall"
 )
 
 type portRuleFunc = func(port uint16) landlock.NetRule
@@ -54,10 +54,7 @@ func setupLandlock() error {
 	// for creating runtime/temporary files. Note that syslog can be in multiple
 	// places not just /dev/log, e.g. /var/run is an option.
 	for _, path := range []string{"/dev", "/var/run", "/tmp", "/proc"} {
-		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		fsRules = append(fsRules, landlock.RWDirs(path))
+		fsRules = append(fsRules, landlock.RWDirs(path).IgnoreIfMissing())
 	}
 
 	// Default RO FS rules. Some paths we need always accessible for name
@@ -66,10 +63,7 @@ func setupLandlock() error {
 	// /etc/nsswitch.conf, /etc/gai.conf), but it's difficult to enumerate the
 	// exact set of files required in every conceivable situation.
 	for _, path := range []string{"/etc", "/usr/share/zoneinfo"} {
-		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		fsRules = append(fsRules, landlock.RODirs(path))
+		fsRules = append(fsRules, landlock.RODirs(path).IgnoreIfMissing())
 	}
 
 	// Process string flags containing addresses or URLs.
@@ -125,20 +119,17 @@ func setupLandlock() error {
 		if path == nil || len(*path) == 0 {
 			continue
 		}
-		if _, err := os.Stat(*path); errors.Is(err, os.ErrNotExist) {
-			continue
-		}
 
 		// Note: If one of these args is a symlink, we also need to add a rule for
 		// the target of the symlink.
-		fsRules = append(fsRules, landlock.RODirs(filepath.Dir(*path)))
+		fsRules = append(fsRules, landlock.RODirs(filepath.Dir(*path)).IgnoreIfMissing())
 
 		target, err := filepath.EvalSymlinks(*path)
 		if err != nil {
 			continue
 		}
 		if target != *path {
-			fsRules = append(fsRules, landlock.RODirs(filepath.Dir(target)))
+			fsRules = append(fsRules, landlock.RODirs(filepath.Dir(target)).IgnoreIfMissing())
 		}
 	}
 
@@ -172,12 +163,19 @@ func setupLandlock() error {
 		}
 	}
 
-	// Print landlock errors, but continue running. Landlock is a relatively new
-	// feature and not supported on older kernels (net rules were added in v6.7,
-	// Jan 2024). We may change this in a future version of Ghostunnel as we get
-	// more comfortable with Landlock.
-	config := landlock.V4
-	err := config.RestrictPaths(fsRules...)
+	// Log if kernel doesn't support net rules so we don't just silently downgrade
+	abiVersion, err := llsys.LandlockGetABIVersion()
+	if err != nil || abiVersion < 4 {
+		logger.Printf("note: kernel does not support landlock net rules, sandboxing will be limited")
+	}
+
+	// Enable best-effort mode: If the kernel doesn't support ABI v8, then go-landlock
+	// will enforce as much as possible given the ABI version that *is* available. Note
+	// that normally no error will be returned in best-effort mode, but we capture and
+	// return it here anyway to be defensive.
+	config := landlock.V8.BestEffort()
+
+	err = config.RestrictPaths(fsRules...)
 	if err != nil {
 		return err
 	}
