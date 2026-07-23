@@ -1117,7 +1117,7 @@ func (env *Environment) serveStatus() error {
 
 	go func() {
 		err := env.statusHTTP.Serve(listener)
-		if err != nil {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Printf("error serving status port: %s", err)
 		}
 	}()
