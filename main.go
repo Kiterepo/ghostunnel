@@ -107,7 +107,7 @@ var (
 	clientCommand       = app.Command("client", "Client mode (plain TCP/UNIX listener -> TLS target).")
 	clientListenAddress = clientCommand.Flag("listen", "Address and port to listen on (can be HOST:PORT, unix:PATH, systemd:NAME or launchd:NAME).").PlaceHolder("ADDR").Required().String()
 	// Note: can't use .TCP() for clientForwardAddress because we need to set the original string in tls.Config.ServerName.
-	clientForwardAddress = clientCommand.Flag("target", "Address to forward connections to (must be HOST:PORT).").PlaceHolder("ADDR").Required().String()
+	clientForwardAddress = clientCommand.Flag("target", "Address to forward connections to (can be HOST:PORT or unix:PATH).").PlaceHolder("ADDR").Required().String()
 	clientUnsafeListen   = clientCommand.Flag("unsafe-listen", "If set, does not limit listen to localhost, 127.0.0.1, [::1], or UNIX sockets.").Bool()
 	clientServerName     = clientCommand.Flag("override-server-name", "If set, overrides the server name used for hostname verification.").PlaceHolder("NAME").String()
 	clientProxy          = clientCommand.Flag("proxy", "If set, connect to target over given proxy (HTTP CONNECT or SOCKS5). Must be a proxy URL.").PlaceHolder("URL").URL()
@@ -530,8 +530,8 @@ func validateClientTarget() error {
 	if err != nil {
 		return fmt.Errorf("invalid --target address: %w", err)
 	}
-	if network != "tcp" {
-		return fmt.Errorf("invalid --target network %q: client mode requires a HOST:PORT TCP target", network)
+	if !socket.IsDialableNetwork(network) {
+		return fmt.Errorf("invalid --target network %q: only tcp and unix targets are supported (systemd:/launchd: cannot be dialed)", network)
 	}
 	return nil
 }
@@ -826,7 +826,8 @@ func run(args []string) error {
 
 		// NOTE: We don't provide a target status address here because this handler
 		// is for the client /_status endpoint, its target will be a Ghostunnel in
-		// server mode, and thus this should be a (default) TCP check.
+		// server mode, and thus this should be a (default) connect check via the
+		// backend dialer (which handles both tcp and unix targets).
 		status := newStatusHandler(dial, command, *clientListenAddress, *clientForwardAddress, "")
 		env := &Environment{
 			status:          status,
