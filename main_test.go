@@ -608,16 +608,12 @@ func TestServerBackendDialerAcceptsUnix(t *testing.T) {
 	assert.NotNil(t, dial, "unix: target should produce a dialer")
 }
 
-func TestValidateClientTargetRejectsUnix(t *testing.T) {
+func TestValidateClientTargetAcceptsUnix(t *testing.T) {
 	original := *clientForwardAddress
 	defer func() { *clientForwardAddress = original }()
 
-	*clientForwardAddress = "unix:/tmp/foo"
-	err := validateClientTarget()
-	assert.NotNil(t, err, "unix: target should be rejected for client mode")
-	if err != nil {
-		assert.Contains(t, err.Error(), "unix", "error message should mention the offending network")
-	}
+	*clientForwardAddress = "unix:/tmp/ghostunnel-target-test.sock"
+	assert.Nil(t, validateClientTarget(), "unix: target should be accepted for client mode")
 }
 
 func TestValidateClientTargetRejectsSystemd(t *testing.T) {

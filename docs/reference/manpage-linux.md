@@ -378,7 +378,8 @@ Client mode (plain TCP/UNIX listener -\> TLS target). **--listen=ADDR**
 Address and port to listen on (can be HOST:PORT, unix:PATH, systemd:NAME
 or launchd:NAME).
 
-**--target=ADDR** Address to forward connections to (must be HOST:PORT).
+**--target=ADDR** Address to forward connections to (can be HOST:PORT or
+unix:PATH).
 
 **--unsafe-listen** If set, does not limit listen to localhost,
 127.0.0.1, \[::1\], or UNIX sockets.

@@ -173,7 +173,7 @@ for `systemd:NAME` and `launchd:NAME` addresses.
 | Flag | Description |
 |------|-------------|
 | `--listen ADDR` | Address and port to listen on (`HOST:PORT`, `unix:PATH`, `systemd:NAME`, or `launchd:NAME`). |
-| `--target ADDR` | Address to forward connections to (must be `HOST:PORT`). |
+| `--target ADDR` | Address to forward connections to (`HOST:PORT` or `unix:PATH`). A `unix:PATH` target has no hostname, so set `--override-server-name` for hostname verification. |
 
 ### Connection
 

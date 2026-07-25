@@ -1064,6 +1064,61 @@ class UnixServer(MySocket):
         self.listener = None
         os.remove(self.socket_path)
 
+
+class TlsUnixServer(MySocket):
+    """TLS server listening on a unix socket, like TlsServer but with a
+    unix socket instead of a TCP port. Used as the backend for testing
+    unix socket targets in client mode."""
+
+    def __init__(
+            self,
+            cert,
+            ca,
+            cert_reqs=ssl.CERT_REQUIRED):
+        super().__init__()
+        self.cert = cert
+        self.ca = ca
+        self.cert_reqs = cert_reqs
+        self.socket_path = os.path.join(mkdtemp(dir=_test_tmpdir()), 'ghostunnel-test-socket')
+        self.tls_listener = None
+
+    def get_socket_path(self):
+        return self.socket_path
+
+    def listen(self):
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        listener.settimeout(TIMEOUT)
+        listener.bind(self.socket_path)
+        listener.listen(1)
+        self.tls_listener = wrap_socket(listener,
+                                            server_side=True,
+                                            keyfile='{0}.key'.format(
+                                                self.cert),
+                                            certfile='{0}.crt'.format(
+                                                self.cert),
+                                            ca_certs='{0}.crt'.format(self.ca),
+                                            cert_reqs=self.cert_reqs)
+
+    def accept(self):
+        self.socket, _ = self.tls_listener.accept()
+        self.socket.settimeout(TIMEOUT)
+        self.tls_listener.close()
+        self.tls_listener = None
+
+    def validate_client_cert(self, ou):
+        actual = _get_ou(self.socket.getpeercert())
+        if actual == ou:
+            return
+        raise Exception("did not connect to expected peer: got {}, wanted: {}".format(
+                        actual, ou))
+
+    def cleanup(self):
+        super().cleanup()
+        if self.tls_listener:
+            self.tls_listener.close()
+        self.tls_listener = None
+        os.remove(self.socket_path)
+
 ######################### SocketPair #########################
 
 # This is whacky but works. This class represents a pair of sockets which
