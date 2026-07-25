@@ -112,7 +112,10 @@ replace hostname verification entirely rather than adding to it: the
 `--use-workload-api` is set, hostname verification is replaced by SPIFFE
 authentication — peers are verified as presenting a valid X509-SVID, so use
 `--verify-uri` to pin the expected SPIFFE ID), and `--verify-spki-pin` (see below,
-which authenticates the server by its SPKI pin alone).
+which authenticates the server by its SPKI pin alone). A `unix:PATH` target
+carries no hostname, so unless one of those exceptions is in effect,
+`--override-server-name` must be set to give hostname verification a name to
+check; connections fail otherwise.
 
 When multiple verification flags are specified, they are OR'd together: a
 connection is allowed if at least one flag matches (and hostname verification
