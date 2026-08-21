@@ -129,7 +129,7 @@ func resolveCipherSuites(spec string, allowUnsafe bool) ([]uint16, error) {
 }
 
 // buildConfig builds a generic tls.Config
-func buildConfig(enabledCipherSuites string, maxTLSVersion string, allowUnsafe bool) (*tls.Config, error) {
+func buildConfig(enabledCipherSuites string, maxTLSVersion string, allowUnsafe bool, nextProtos string) (*tls.Config, error) {
 	// List of cipher suite preferences:
 	// * We list ECDSA ahead of RSA to prefer ECDSA for multi-cert setups.
 	// * We list AES-128 ahead of AES-256 for performance reasons.
@@ -152,19 +152,23 @@ func buildConfig(enabledCipherSuites string, maxTLSVersion string, allowUnsafe b
 		config.MaxVersion = maxVer
 	}
 
+	if nextProtos != "" {
+		config.NextProtos = strings.Split(nextProtos, ",")
+	}
+
 	return config, nil
 }
 
 // buildClientConfig builds a tls.Config for clients
-func buildClientConfig(enabledCipherSuites string, maxTLSVersion string, allowUnsafe bool) (*tls.Config, error) {
+func buildClientConfig(enabledCipherSuites string, maxTLSVersion string, allowUnsafe bool, nextProtos string) (*tls.Config, error) {
 	// At the moment, we don't apply any extra settings on top of the generic
 	// config for client contexts
-	return buildConfig(enabledCipherSuites, maxTLSVersion, allowUnsafe)
+	return buildConfig(enabledCipherSuites, maxTLSVersion, allowUnsafe, nextProtos)
 }
 
 // buildServerConfig builds a tls.Config for servers
-func buildServerConfig(enabledCipherSuites string, maxTLSVersion string, allowUnsafe bool) (*tls.Config, error) {
-	config, err := buildConfig(enabledCipherSuites, maxTLSVersion, allowUnsafe)
+func buildServerConfig(enabledCipherSuites string, maxTLSVersion string, allowUnsafe bool, nextProtos string) (*tls.Config, error) {
+	config, err := buildConfig(enabledCipherSuites, maxTLSVersion, allowUnsafe, nextProtos)
 	if err != nil {
 		return nil, err
 	}
