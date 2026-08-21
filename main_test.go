@@ -86,6 +86,7 @@ func TestFlagValidation(t *testing.T) {
 		*serverStatusTargetAddress = ""
 		*connectTimeout = 10 * time.Second
 		*useWorkloadAPITimeout = 10 * time.Minute
+		*alpn = ""
 	}
 	defer reset()
 
@@ -116,6 +117,16 @@ func TestFlagValidation(t *testing.T) {
 	reset()
 	*useWorkloadAPITimeout = 0
 	assert.Nil(t, validateFlags(nil), "zero --use-workload-api-timeout (wait indefinitely) should be accepted")
+
+	// Parse-rule details are covered in tls_test.go; these two cases just
+	// prove that validateFlags wires in validateALPN.
+	reset()
+	*alpn = "h2, http/1.1"
+	assert.Nil(t, validateFlags(nil), "valid --alpn should be accepted")
+
+	reset()
+	*alpn = "h2,,http/1.1"
+	assert.NotNil(t, validateFlags(nil), "--alpn with an empty entry should be rejected")
 }
 
 func TestServerFlagValidation(t *testing.T) {

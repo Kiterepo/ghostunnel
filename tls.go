@@ -18,6 +18,7 @@ package main
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -128,6 +129,59 @@ func resolveCipherSuites(spec string, allowUnsafe bool) ([]uint16, error) {
 	return suites, nil
 }
 
+// acmeALPNProtocol is the ALPN protocol name reserved for the ACME
+// TLS-ALPN-01 challenge (RFC 8737). It's rejected in --alpn because the proxy
+// treats any connection that negotiates it as a challenge probe and closes it
+// without dialing the backend, so listing it would silently blackhole
+// fully-authenticated connections. When ACME is enabled, certloader advertises
+// it automatically.
+const acmeALPNProtocol = "acme-tls/1"
+
+// maxALPNProtocolLength is the maximum length of a single ALPN protocol name.
+// The ALPN extension encodes each name with a one-byte length prefix (RFC 7301),
+// so anything longer cannot be put on the wire.
+const maxALPNProtocolLength = 255
+
+// parseALPN parses a comma-separated list of ALPN protocol names (e.g.
+// "h2,http/1.1") and returns them in the order given, which is the order of
+// preference. Surrounding whitespace on each entry is trimmed, so
+// "h2, http/1.1" and "h2,http/1.1" are equivalent. An empty spec yields a nil
+// list, leaving tls.Config.NextProtos unset (ALPN disabled).
+//
+// Like resolveCipherSuites, this helper is the single source of truth shared by
+// validateALPN (early validation at flag-parse time) and buildConfig (used to
+// construct the runtime tls.Config), so the two cannot drift apart.
+//
+// Rejecting malformed entries up front matters because the two sides fail very
+// differently at runtime. A client with an empty or over-long NextProtos entry
+// is rejected by crypto/tls on every single handshake ("tls: invalid NextProtos
+// value"), so the process starts fine and then no connection ever works. A
+// server never validates at all: a malformed entry simply never matches what a
+// client offers, so negotiation quietly misbehaves. Failing at startup turns
+// both into an obvious flag error.
+func parseALPN(spec string) ([]string, error) {
+	if spec == "" {
+		return nil, nil
+	}
+
+	protos := []string{}
+	for proto := range strings.SplitSeq(spec, ",") {
+		name := strings.TrimSpace(proto)
+		if name == "" {
+			return nil, errors.New("--alpn must not contain empty protocol names")
+		}
+		if len(name) > maxALPNProtocolLength {
+			return nil, fmt.Errorf("--alpn protocol %q is longer than the maximum of %d bytes", name, maxALPNProtocolLength)
+		}
+		if name == acmeALPNProtocol {
+			return nil, fmt.Errorf("--alpn must not contain %q: it is reserved for the ACME TLS-ALPN-01 challenge and is advertised automatically when ACME is in use", acmeALPNProtocol)
+		}
+
+		protos = append(protos, name)
+	}
+	return protos, nil
+}
+
 // buildConfig builds a generic tls.Config
 func buildConfig(enabledCipherSuites string, maxTLSVersion string, allowUnsafe bool, nextProtos string) (*tls.Config, error) {
 	// List of cipher suite preferences:
@@ -152,9 +206,11 @@ func buildConfig(enabledCipherSuites string, maxTLSVersion string, allowUnsafe b
 		config.MaxVersion = maxVer
 	}
 
-	if nextProtos != "" {
-		config.NextProtos = strings.Split(nextProtos, ",")
+	protos, err := parseALPN(nextProtos)
+	if err != nil {
+		return nil, err
 	}
+	config.NextProtos = protos
 
 	return config, nil
 }
