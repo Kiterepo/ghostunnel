@@ -222,6 +222,31 @@ func TestACMETLSConfigGetServerConfig(t *testing.T) {
 	assert.Contains(t, tlsConfig.NextProtos, acmez.ACMETLS1Protocol)
 }
 
+func TestWithoutACMEChallenge(t *testing.T) {
+	magicConfig := certmagic.NewDefault()
+	source := &acmeTLSConfigSource{
+		magicConfig:  magicConfig,
+		gtACMEConfig: &ACMEConfig{},
+	}
+	acmeConfig := &acmeTLSConfig{
+		magicConfig: magicConfig,
+		base:        &tls.Config{MinVersion: tls.VersionTLS12},
+		source:      source,
+	}
+
+	stripped := WithoutACMEChallenge(acmeConfig).GetServerConfig()
+	assert.NotContains(t, stripped.NextProtos, acmez.ACMETLS1Protocol, "challenge protocol should be stripped")
+	assert.Empty(t, stripped.NextProtos, "no other protocols were configured")
+	assert.Nil(t, stripped.GetConfigForClient, "challenge cert handler should be stripped")
+	assert.NotNil(t, stripped.GetCertificate, "certificate source must be preserved")
+
+	// The inner config is cached and shared with other listeners, so the
+	// wrapper must not have mutated it.
+	inner := acmeConfig.GetServerConfig()
+	assert.Contains(t, inner.NextProtos, acmez.ACMETLS1Protocol, "inner config must keep the challenge protocol")
+	assert.NotNil(t, inner.GetConfigForClient, "inner config must keep the challenge cert handler")
+}
+
 func TestACMETLSConfigGetServerConfigWithTrustStore(t *testing.T) {
 	// Verify that a custom trust store (from --cacert) is set as ClientCAs
 	// in the TLS config returned by GetServerConfig. This is the fix for

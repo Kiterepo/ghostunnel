@@ -42,6 +42,9 @@ The test asserts:
      listener — the cert's NotBefore advances. This DOES exercise the fix.
   3. A real mTLS client (no acme-tls/1 ALPN, valid client cert) is still
      proxied normally throughout.
+  4. The status port accepts clients that offer ALPN: unlike the tunnel
+     listener it must not advertise acme-tls/1, which would otherwise be
+     its only protocol and lock out monitoring clients.
 
 Skips if not on Linux, or if pebble is not on PATH.
 """
@@ -113,6 +116,7 @@ FQDN = 'localhost'  # Pebble validates against the SNI/identifier; localhost
 # held port on macOS. The brief race window before the real binder claims
 # the port is acceptable for this single-instance test.
 ACME_PORT = get_free_port(release=True)
+STATUS_PORT = get_free_port(release=True)
 
 # Force a fast renewal cycle. Pebble issues 30-second certs; certmagic's
 # renewal threshold (RenewalWindowRatio=1/3) fires when ~10s remain, i.e.
@@ -313,6 +317,7 @@ try:
         # invisible. TLS 1.2 fails the handshake before ConnectionState
         # is populated, exposing the bug.
         '--max-tls-version=TLS1.2',
+        '--status={0}:{1}'.format(LOCALHOST, STATUS_PORT),
     ])
 
     # Wait for ghostunnel's main listener to come up. We probe with a real
@@ -325,6 +330,25 @@ try:
     # got proxied through). Give the backend's accept loop a moment to
     # observe the close, then we can reset counters cleanly.
     time.sleep(0.5)
+
+    # -----------------------------------------------------------------
+    # Status port under ACME: it must not advertise acme-tls/1, so a
+    # monitoring client offering standard HTTP protocols (as browsers
+    # and curl do by default) completes the handshake with no protocol
+    # negotiated instead of getting a no_application_protocol alert.
+    # -----------------------------------------------------------------
+    deadline = time.time() + 10
+    while True:
+        ok, proto, conn = tls_probe(STATUS_PORT, alpn=['h2', 'http/1.1'])
+        if ok or time.time() > deadline:
+            break
+        time.sleep(0.2)
+    assert ok, (
+        "ALPN-offering client must reach the status port: {0}".format(conn))
+    assert proto is None, (
+        "status port must not negotiate a protocol, got {0}".format(proto))
+    conn.close()
+    print_ok("status port accepts ALPN-offering clients PASS")
 
     # -----------------------------------------------------------------
     # Pre-renewal sanity: mTLS works for valid client, rejects no-cert.

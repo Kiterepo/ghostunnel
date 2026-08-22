@@ -130,7 +130,7 @@ var (
 	useWorkloadAPI        = app.Flag("use-workload-api", "If true, certificate and root CAs are retrieved via the SPIFFE Workload API").Bool()
 	useWorkloadAPIAddr    = app.Flag("use-workload-api-addr", "If set, certificates and root CAs are retrieved via the SPIFFE Workload API at the specified address (implies --use-workload-api)").Envar("SPIFFE_ENDPOINT_SOCKET").PlaceHolder("ADDR").String()
 	useWorkloadAPITimeout = app.Flag("use-workload-api-timeout", "Timeout for the initial certificate fetch from the SPIFFE Workload API at startup (set to 0 to wait indefinitely)").Default("10m").Duration()
-	alpn                  = app.Flag("alpn", "Prioritized comma-separated list of protocols to negotiate via ALPN").PlaceHolder("PROTOS").String()
+	alpn                  = app.Flag("alpn", "Set of protocols to negotiate via ALPN, comma-separated, in order of preference (e.g. h2,http/1.1).").PlaceHolder("PROTOS").String()
 
 	// Deprecated cipher suite flags
 	enabledCipherSuites     = app.Flag("cipher-suites", "Set of cipher suites to enable, comma-separated, in order of preference (AES, CHACHA).").Hidden().Default("AES,CHACHA").String()
@@ -280,6 +280,9 @@ func validateFlags(app *kingpin.Application) error {
 	if *useWorkloadAPITimeout < 0 {
 		return fmt.Errorf("--use-workload-api-timeout duration must not be negative (use 0 to wait indefinitely)")
 	}
+	if err := validateALPN(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -332,6 +335,17 @@ func validateCredentials(creds []bool) int {
 
 func validateCipherSuites() error {
 	if _, err := resolveCipherSuites(*enabledCipherSuites, *allowUnsafeCipherSuites); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateALPN rejects a malformed --alpn list at flag-parse time, so a typo
+// such as "h2, ,http/1.1" surfaces as a startup error rather than as handshake
+// failures (client mode) or protocols that silently never negotiate (server
+// mode). See parseALPN for details.
+func validateALPN() error {
+	if _, err := parseALPN(*alpn); err != nil {
 		return err
 	}
 	return nil
@@ -1069,6 +1083,9 @@ func (env *Environment) serveStatus() error {
 	}
 
 	if network == "tcp" && https && env.tlsConfigSource.CanServe() {
+		// The status endpoint deliberately doesn't apply --alpn: it always
+		// serves HTTPS, so a tunnel configured for some other protocol (e.g.
+		// --alpn=postgresql) would otherwise lock out monitoring clients.
 		config, err := buildServerConfig(*enabledCipherSuites, *maxTLSVersion, *allowUnsafeCipherSuites, "")
 		if err != nil {
 			return err
@@ -1078,6 +1095,14 @@ func (env *Environment) serveStatus() error {
 		serverConfig, err := getServerConfig(env.tlsConfigSource, config)
 		if err != nil {
 			return err
+		}
+		if *serverAutoACMEFQDN != "" {
+			// The ACME source appends acme-tls/1 to every listener it serves,
+			// which would leave this listener advertising only acme-tls/1 and
+			// rejecting monitoring clients that offer ALPN (as browsers and
+			// curl do by default). The TLS-ALPN-01 challenge only ever arrives
+			// on the tunnel listener, so strip the challenge plumbing here.
+			serverConfig = certloader.WithoutACMEChallenge(serverConfig)
 		}
 		listener = certloader.NewListener(listener, serverConfig)
 	}

@@ -23,6 +23,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -257,6 +258,36 @@ func TestBuildConfig(t *testing.T) {
 	assert.Nil(t, err, "should be able to build TLS config with next protos")
 	assert.Equal(t, []string{"h3", "h2", "http/1.1"}, conf.NextProtos, "must have correct list of next protos")
 
+	conf, err = buildConfig("AES,CHACHA", "", false, " h2 , http/1.1 ")
+	assert.Nil(t, err, "should be able to build TLS config with padded next protos")
+	assert.Equal(t, []string{"h2", "http/1.1"}, conf.NextProtos, "must trim whitespace around next protos")
+
+	// An empty entry is worse than useless: crypto/tls rejects it on every
+	// client handshake, and a server would just never negotiate it.
+	_, err = buildConfig("AES,CHACHA", "", false, "h2,,http/1.1")
+	assert.NotNil(t, err, "should fail to build config with an empty next proto")
+	assert.Contains(t, err.Error(), "--alpn", "error should mention the --alpn flag")
+
+	_, err = buildConfig("AES,CHACHA", "", false, "h2,")
+	assert.NotNil(t, err, "should fail to build config with a trailing comma in next protos")
+
+	_, err = buildConfig("AES,CHACHA", "", false, " ")
+	assert.NotNil(t, err, "should fail to build config with a whitespace-only next proto")
+
+	_, err = buildConfig("AES,CHACHA", "", false, strings.Repeat("x", maxALPNProtocolLength+1))
+	assert.NotNil(t, err, "should fail to build config with an over-long next proto")
+	assert.Contains(t, err.Error(), "255 bytes", "error should mention the maximum length")
+
+	conf, err = buildConfig("AES,CHACHA", "", false, strings.Repeat("x", maxALPNProtocolLength))
+	assert.Nil(t, err, "should be able to build TLS config with a maximum-length next proto")
+	assert.Len(t, conf.NextProtos, 1, "must keep the maximum-length next proto")
+
+	// The reserved ACME challenge protocol would make the proxy blackhole
+	// every connection that negotiates it, so it must be rejected up front.
+	_, err = buildConfig("AES,CHACHA", "", false, "h2,acme-tls/1")
+	assert.NotNil(t, err, "should fail to build config with the reserved ACME protocol")
+	assert.Contains(t, err.Error(), "acme-tls/1", "error should mention the reserved protocol")
+
 	logger := log.New(os.Stdout, "", log.LstdFlags|log.Lmicroseconds)
 	cert, err := buildCertificate("", "", "", "", tmpKeystoreSeparateCert.Name(), logger)
 	assert.NotNil(t, cert, "cert with empty keystorePath should not be nil")
@@ -441,6 +472,39 @@ func TestValidateCipherSuitesMatchesBuildConfig(t *testing.T) {
 			validateErr == nil, buildErr == nil,
 			"validateCipherSuites and buildConfig must agree for spec=%q allowUnsafe=%v (validateErr=%v buildErr=%v)",
 			tc.spec, tc.allowUnsafe, validateErr, buildErr)
+	}
+}
+
+func TestValidateALPNMatchesBuildConfig(t *testing.T) {
+	origALPN := *alpn
+	defer func() {
+		*alpn = origALPN
+	}()
+
+	cases := []string{
+		"",
+		"h2",
+		"h2,http/1.1",
+		" h2 , http/1.1 ",
+		"h2,,http/1.1",
+		"h2,",
+		",h2",
+		" ",
+		strings.Repeat("x", maxALPNProtocolLength),
+		strings.Repeat("x", maxALPNProtocolLength+1),
+		"acme-tls/1",
+		"h2,acme-tls/1",
+	}
+	for _, spec := range cases {
+		*alpn = spec
+
+		validateErr := validateALPN()
+		_, buildErr := buildConfig("AES,CHACHA", "", false, spec)
+
+		assert.Equal(t,
+			validateErr == nil, buildErr == nil,
+			"validateALPN and buildConfig must agree for spec=%q (validateErr=%v buildErr=%v)",
+			spec, validateErr, buildErr)
 	}
 }
 

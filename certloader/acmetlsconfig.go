@@ -308,3 +308,35 @@ func (a *acmeTLSConfig) buildServerConfig(pool *x509.CertPool) *tls.Config {
 
 	return config
 }
+
+// WithoutACMEChallenge wraps a TLSServerConfig obtained from an ACME source
+// and strips the TLS-ALPN-01 challenge plumbing from the configs it returns:
+// the acme-tls/1 entry in NextProtos and the GetConfigForClient hook that
+// serves challenge certificates to validator-shaped handshakes. The ACME CA
+// only ever delivers the challenge to the tunnel listener (port 443 of the
+// validated FQDN), so a listener that doesn't serve challenges (e.g. the
+// status port) shouldn't advertise acme-tls/1 — with no other protocols
+// configured it would otherwise advertise only acme-tls/1 and reject any
+// client that offers ALPN.
+func WithoutACMEChallenge(inner TLSServerConfig) TLSServerConfig {
+	return &acmeStrippedTLSConfig{inner: inner}
+}
+
+type acmeStrippedTLSConfig struct {
+	inner TLSServerConfig
+}
+
+func (c *acmeStrippedTLSConfig) GetServerConfig() *tls.Config {
+	// The inner config is cached and shared across connections, so work on a
+	// clone rather than mutating it.
+	config := c.inner.GetServerConfig().Clone()
+	var protos []string
+	for _, proto := range config.NextProtos {
+		if proto != acmez.ACMETLS1Protocol {
+			protos = append(protos, proto)
+		}
+	}
+	config.NextProtos = protos
+	config.GetConfigForClient = nil
+	return config
+}

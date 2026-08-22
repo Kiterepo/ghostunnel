@@ -384,7 +384,7 @@ func TestRecoverECDSAKey(t *testing.T) {
 
 	ecRecovered, ok := recovered.(*ecdsa.PrivateKey)
 	require.True(t, ok, "expected *ecdsa.PrivateKey, got %T", recovered)
-	assert.Equal(t, key.D.Bytes(), ecRecovered.D.Bytes())
+	assert.True(t, key.Equal(ecRecovered))
 }
 
 func TestRecoverED25519Key(t *testing.T) {

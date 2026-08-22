@@ -29,6 +29,33 @@ exchange, set the environment variable `GODEBUG=tlsmlkem=0`. See Go's
 [`CurvePreferences`][curve-prefs] documentation for the authoritative list of
 currently-supported key exchanges and the `GODEBUG` knobs that control them.
 
+### ALPN
+
+*Available since v1.11.3.*
+
+The `--alpn` flag sets the protocols to negotiate via [ALPN][rfc7301],
+comma-separated (e.g. `h2,http/1.1`). The list is given in order of
+preference, and that preference is authoritative: whichever end of the
+connection is acting as the TLS server picks the first entry from its own list
+that the peer also offers.
+
+In server mode, setting `--alpn` also affects which connections are accepted.
+A client that offers ALPN with no protocol in common is rejected with a
+`no_application_protocol` alert, while a client that doesn't use ALPN at all
+still connects as normal. Because of this last point (and an exception
+inherited from Go's TLS stack: when the list contains `h2`, a client offering
+only `http/1.1` is treated as if it hadn't used ALPN and still connects, see
+[golang/go#46310](https://go.dev/issue/46310)), this should not be relied on
+as an access control mechanism.
+
+The status port (`--status`) always serves HTTPS and deliberately ignores
+`--alpn` (and, when ACME is in use, doesn't advertise `acme-tls/1` either), so
+tunneling a non-HTTP protocol doesn't lock out monitoring clients.
+
+When ACME is enabled, `acme-tls/1` is added automatically for the TLS-ALPN-01
+challenge. The name is reserved for that purpose and can't be listed in
+`--alpn`.
+
 ### Client Authentication
 
 In server mode, Ghostunnel requires and verifies client certificates by
@@ -136,6 +163,7 @@ disabled when PKCS#11 is in use, since PKCS#11 modules are opaque shared
 libraries that may require access to arbitrary files and sockets.
 
 [crypto-tls]: https://pkg.go.dev/crypto/tls
+[rfc7301]: https://datatracker.ietf.org/doc/html/rfc7301
 [curve-prefs]: https://pkg.go.dev/crypto/tls#Config.CurvePreferences
 [landlock]: https://docs.kernel.org/userspace-api/landlock.html
 [tn3165]: https://developer.apple.com/documentation/technotes/tn3165-packet-filter-is-not-api

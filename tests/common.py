@@ -822,7 +822,7 @@ def get_spki_pin(cert_file, algo):
 def print_ok(msg):
     print("\033[92m{0}\033[0m".format(msg))
 
-def wrap_socket(socket, keyfile=None, certfile=None, ca_certs=None, cert_reqs=ssl.CERT_REQUIRED, server_side=False):
+def wrap_socket(socket, keyfile=None, certfile=None, ca_certs=None, cert_reqs=ssl.CERT_REQUIRED, server_side=False, alpn=None):
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     if certfile is not None and keyfile is not None:
@@ -830,6 +830,8 @@ def wrap_socket(socket, keyfile=None, certfile=None, ca_certs=None, cert_reqs=ss
     if ca_certs is not None:
         ctx.load_verify_locations(cafile=ca_certs)
     ctx.verify_mode = cert_reqs
+    if alpn is not None:
+        ctx.set_alpn_protocols(alpn)
     return ctx.wrap_socket(socket, server_side=server_side)
 
 def urlopen(path):
@@ -854,6 +856,10 @@ class MySocket:
 
     def get_socket(self):
         return self.socket
+
+    def selected_alpn_protocol(self):
+        """Protocol negotiated via ALPN, or None if ALPN wasn't used."""
+        return self.socket.selected_alpn_protocol()
 
     def cleanup(self):
         if self.socket:
@@ -916,15 +922,18 @@ class TcpServer(MySocket):
 
 
 class TlsClient(MySocket):
-    def __init__(self, cert, ca, port, min_version=None, max_version=None):
+    def __init__(self, cert, ca, port, min_version=None, max_version=None,
+                 alpn=None):
         super().__init__()
         self.cert = cert
         self.ca = ca
         self.port = port
         self.min_version = min_version
         self.max_version = max_version
+        self.alpn = alpn
 
     def connect(self, attempts=1, peer=None):
+        last_error = None
         for i in range(attempts):
             try:
                 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -936,6 +945,8 @@ class TlsClient(MySocket):
                 ctx.minimum_version = self.min_version if self.min_version is not None else ssl.TLSVersion.TLSv1_2
                 if self.max_version is not None:
                     ctx.maximum_version = self.max_version
+                if self.alpn is not None:
+                    ctx.set_alpn_protocols(self.alpn)
 
                 # First create TCP connection
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -944,10 +955,12 @@ class TlsClient(MySocket):
                 self.socket.connect((LOCALHOST, self.port))
                 return
             except Exception as e:
+                last_error = e
                 print('connection attempt {0} failed, error: {1}'.format(i, e))
                 _poll_sleep(i)
 
-        raise Exception("connection failed after {0} attempts".format(attempts))
+        raise Exception("connection failed after {0} attempts".format(
+            attempts)) from last_error
 
 
 class TlsServer(MySocket):
@@ -956,12 +969,14 @@ class TlsServer(MySocket):
             cert,
             ca,
             port,
-            cert_reqs=ssl.CERT_REQUIRED):
+            cert_reqs=ssl.CERT_REQUIRED,
+            alpn=None):
         super().__init__()
         self.cert = cert
         self.ca = ca
         self.port = port
         self.cert_reqs = cert_reqs
+        self.alpn = alpn
         self.tls_listener = None
 
     def listen(self):
@@ -979,7 +994,8 @@ class TlsServer(MySocket):
                                             certfile='{0}.crt'.format(
                                                 self.cert),
                                             ca_certs='{0}.crt'.format(self.ca),
-                                            cert_reqs=self.cert_reqs)
+                                            cert_reqs=self.cert_reqs,
+                                            alpn=self.alpn)
 
     def accept(self):
         self.socket, _ = self.tls_listener.accept()

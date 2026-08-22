@@ -245,6 +245,9 @@ retrieved via the SPIFFE Workload API at the specified address (implies
 fetch from the SPIFFE Workload API at startup (set to 0 to wait
 indefinitely)
 
+**--alpn=PROTOS** Set of protocols to negotiate via ALPN,
+comma-separated, in order of preference (e.g. h2,http/1.1).
+
 **--timed-reload=DURATION** Reload keystores every given interval (e.g.
 300s), refresh listener/client on changes.
 
