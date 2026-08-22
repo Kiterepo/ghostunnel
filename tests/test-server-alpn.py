@@ -9,6 +9,8 @@ Tests that ghostunnel in server mode respects the --alpn flag by verifying that:
 5. A client with no protocol in common is rejected
 """
 
+import ssl
+
 from common import STATUS_PORT, TlsClient, TcpServer, create_default_certs, \
     print_ok, start_ghostunnel_server, terminate, LISTEN_PORT, TARGET_PORT
 
@@ -80,8 +82,13 @@ try:
             "but it succeeded")
     # Any cert or config problem would also fail the connect; make sure it
     # failed for the right reason by checking for the alert on the chained
-    # underlying error.
-    if 'NO_APPLICATION_PROTOCOL' not in str(err.__cause__).upper():
+    # underlying error. Some OpenSSL builds have no error-string entry for
+    # the no_application_protocol alert and report it as "unknown error";
+    # accept that too, since cert/config failures always have named reasons.
+    cause = str(err.__cause__).upper()
+    if not isinstance(err.__cause__, ssl.SSLError) or (
+            'NO_APPLICATION_PROTOCOL' not in cause
+            and 'UNKNOWN ERROR' not in cause):
         raise Exception(
             "expected a no_application_protocol alert, got: {0!r}".format(
                 err.__cause__)) from err
