@@ -1081,7 +1081,7 @@ func TestACMEChallengeNotForwardedToBackend(t *testing.T) {
 	assert.Nil(t, err)
 	defer target.Close()
 
-	var backendHits int32
+	var backendHits atomic.Int32
 	backendDone := make(chan struct{})
 	go func() {
 		defer close(backendDone)
@@ -1089,7 +1089,7 @@ func TestACMEChallengeNotForwardedToBackend(t *testing.T) {
 		if err != nil {
 			return
 		}
-		atomic.AddInt32(&backendHits, 1)
+		backendHits.Add(1)
 		conn.Close()
 	}()
 
@@ -1125,7 +1125,7 @@ func TestACMEChallengeNotForwardedToBackend(t *testing.T) {
 	case <-time.After(500 * time.Millisecond):
 	}
 
-	assert.Equal(t, int32(0), atomic.LoadInt32(&backendHits),
+	assert.Equal(t, int32(0), backendHits.Load(),
 		"backend MUST NOT receive any connection from an ACME TLS-ALPN-01 probe")
 
 	// Sanity check: a normal (non-ACME) client without a client cert must
@@ -1144,7 +1144,7 @@ func TestACMEChallengeNotForwardedToBackend(t *testing.T) {
 		plain.Close()
 	}
 	assert.Error(t, err, "non-ACME client without cert must fail mTLS handshake")
-	assert.Equal(t, int32(0), atomic.LoadInt32(&backendHits),
+	assert.Equal(t, int32(0), backendHits.Load(),
 		"backend MUST still not be reached after rejected mTLS handshake")
 }
 

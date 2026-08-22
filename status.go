@@ -159,16 +159,16 @@ func (s *statusHandler) HandleWatchdog() {
 func (s *statusHandler) status(ctx context.Context) statusResponse {
 	resp := statusResponse{
 		Time: time.Now(),
+
+		Revision:       version,
+		Compiler:       runtime.Version(),
+		ListenAddress:  s.listenAddress,
+		ForwardAddress: s.forwardAddress,
+
+		// Defaults. Will be overridden if checks fail.
+		BackendOk:     true,
+		BackendStatus: "ok",
 	}
-
-	resp.Revision = version
-	resp.Compiler = runtime.Version()
-	resp.ListenAddress = s.listenAddress
-	resp.ForwardAddress = s.forwardAddress
-
-	// Defaults. Will be overridden if checks fail.
-	resp.BackendOk = true
-	resp.BackendStatus = "ok"
 
 	if err := s.checkBackendStatus(ctx); err != nil {
 		resp.BackendOk = false

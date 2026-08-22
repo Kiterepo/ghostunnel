@@ -1731,7 +1731,7 @@ func TestShutdownHandlerConcurrentPosts(t *testing.T) {
 		close(done)
 	}()
 
-	for i := 0; i < concurrent; i++ {
+	for range concurrent {
 		go func() {
 			defer wg.Done()
 			req := httptest.NewRequest(http.MethodPost, "/_shutdown", nil)
