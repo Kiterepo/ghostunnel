@@ -197,7 +197,7 @@ func TestKeyToPemECDSA(t *testing.T) {
 	require.NoError(t, err)
 	ecKey, ok := recovered.(*ecdsa.PrivateKey)
 	require.True(t, ok)
-	assert.Equal(t, key.D.Bytes(), ecKey.D.Bytes())
+	assert.True(t, key.Equal(ecKey))
 }
 
 // --- readDERBlocks tests ---

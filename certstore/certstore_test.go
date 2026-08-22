@@ -237,12 +237,8 @@ func TestSignerECDSA(t *testing.T) {
 			t.Fatal("expected pk to be an RSA public key")
 		}
 
-		if ecPub.X.Cmp(ecPriv.X) != 0 {
-			t.Fatalf("bad X. Got %s, expected %s", ecPub.X.Text(16), ecPriv.X.Text(16))
-		}
-
-		if ecPub.Y.Cmp(ecPriv.Y) != 0 {
-			t.Fatalf("bad Y. Got %s, expected %s", ecPub.Y.Text(16), ecPriv.Y.Text(16))
+		if !ecPub.Equal(&ecPriv.PublicKey) {
+			t.Fatal("signer public key does not match private key")
 		}
 
 		// ECDSAWithSHA1
