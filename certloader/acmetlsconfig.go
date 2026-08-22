@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/caddyserver/certmagic"
-	"github.com/mholt/acmez"
+	"github.com/mholt/acmez/v3"
 )
 
 const defaultMaxAttempts = 5

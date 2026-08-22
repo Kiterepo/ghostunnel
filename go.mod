@@ -12,7 +12,7 @@ require (
 	github.com/landlock-lsm/go-landlock v0.9.0
 	github.com/letsencrypt/pkcs11key/v4 v4.0.1
 	github.com/magefile/mage v1.17.2
-	github.com/mholt/acmez v1.2.0
+	github.com/mholt/acmez/v3 v3.1.6
 	github.com/open-policy-agent/opa v1.19.1
 	github.com/pires/go-proxyproto v0.15.0
 	github.com/prometheus/client_golang v1.24.1
@@ -181,7 +181,6 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-runewidth v0.0.28 // indirect
 	github.com/mgechev/revive v1.16.0 // indirect
-	github.com/mholt/acmez/v3 v3.1.6 // indirect
 	github.com/mholt/archiver v3.1.1+incompatible // indirect
 	github.com/miekg/dns v1.1.73 // indirect
 	github.com/miekg/pkcs11 v1.1.2 // indirect

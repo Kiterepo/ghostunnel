@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/caddyserver/certmagic"
-	"github.com/mholt/acmez"
+	"github.com/mholt/acmez/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
