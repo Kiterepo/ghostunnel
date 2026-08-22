@@ -121,7 +121,7 @@ func TestCachedCertServerConfigConcurrentReload(t *testing.T) {
 	cert, cfg := newCachedCertSource(t)
 
 	pools := []*x509.CertPool{cert.cachedCertPool.Load()}
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		pools = append(pools, x509.NewCertPool())
 	}
 	valid := make(map[*x509.CertPool]bool, len(pools))
@@ -131,9 +131,7 @@ func TestCachedCertServerConfigConcurrentReload(t *testing.T) {
 
 	stop := make(chan struct{})
 	var writer sync.WaitGroup
-	writer.Add(1)
-	go func() {
-		defer writer.Done()
+	writer.Go(func() {
 		i := 0
 		for {
 			select {
@@ -144,21 +142,19 @@ func TestCachedCertServerConfigConcurrentReload(t *testing.T) {
 				i++
 			}
 		}
-	}()
+	})
 
 	var readers sync.WaitGroup
-	for r := 0; r < 4; r++ {
-		readers.Add(1)
-		go func() {
-			defer readers.Done()
-			for n := 0; n < 5000; n++ {
+	for range 4 {
+		readers.Go(func() {
+			for range 5000 {
 				c := cfg.GetServerConfig()
 				if !valid[c.ClientCAs] {
 					t.Errorf("config carries an unexpected (torn/nil) pool: %p", c.ClientCAs)
 					return
 				}
 			}
-		}()
+		})
 	}
 
 	readers.Wait()
@@ -180,7 +176,7 @@ func TestCachedACMENextProtosStable(t *testing.T) {
 		source: source,
 	}
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		c := cfg.GetServerConfig()
 		count := 0
 		for _, p := range c.NextProtos {

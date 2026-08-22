@@ -30,8 +30,6 @@ require (
 	software.sslmate.com/src/go-pkcs12 v0.7.3
 )
 
-require github.com/pkg/errors v0.9.1 // indirect
-
 require (
 	4d63.com/gocheckcompilerdirectives v1.4.0 // indirect
 	4d63.com/gochecknoglobals v0.2.2 // indirect
@@ -195,6 +193,7 @@ require (
 	github.com/nwaples/rardecode v1.1.3 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
@@ -277,7 +276,7 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-go 1.26.0
+go 1.27.0
 
 tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint

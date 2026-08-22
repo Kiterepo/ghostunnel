@@ -729,11 +729,11 @@ var coverageExcludedPatterns = []string{
 // "github.com/ghostunnel/ghostunnel/certstore/test_helpers_darwin.go:10.1,12.2")
 // belongs to a file that should be excluded from coverage reports.
 func isCoverageExcluded(key string) bool {
-	colon := strings.LastIndex(key, ":")
-	if colon < 0 {
+	file, _, found := strings.CutLast(key, ":")
+	if !found {
 		return false
 	}
-	base := filepath.Base(key[:colon])
+	base := filepath.Base(file)
 	for _, pat := range coverageExcludedPatterns {
 		if ok, _ := filepath.Match(pat, base); ok {
 			return true
@@ -773,19 +773,14 @@ func mergeProfiles(inputs []string, output string) error {
 				continue
 			}
 			// Format: "pkg/file.go:start,end stmts count"
-			lastSpace := strings.LastIndex(line, " ")
-			if lastSpace < 0 {
+			rest, countStr, found := strings.CutLast(line, " ")
+			if !found {
 				continue
 			}
-			rest := line[:lastSpace]
-			countStr := line[lastSpace+1:]
-
-			secondLastSpace := strings.LastIndex(rest, " ")
-			if secondLastSpace < 0 {
+			key, stmtsStr, found := strings.CutLast(rest, " ")
+			if !found {
 				continue
 			}
-			key := rest[:secondLastSpace]
-			stmtsStr := rest[secondLastSpace+1:]
 
 			if isCoverageExcluded(key) {
 				continue

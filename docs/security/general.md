@@ -29,6 +29,14 @@ exchange, set the environment variable `GODEBUG=tlsmlkem=0`. See Go's
 [`CurvePreferences`][curve-prefs] documentation for the authoritative list of
 currently-supported key exchanges and the `GODEBUG` knobs that control them.
 
+### Post-Quantum Certificates
+
+Go 1.27 [added support][go127-mldsa] for the post-quantum signature scheme
+ML-DSA (FIPS 204) to `crypto/x509` and `crypto/tls`. Ghostunnel builds using
+Go 1.27 or later inherit this: certificates and private keys using ML-DSA can
+be loaded from PEM files and used in TLS 1.3 handshakes, and peers presenting
+ML-DSA certificates can be verified, with no extra configuration.
+
 ### ALPN
 
 *Available since v1.11.3.*
@@ -165,5 +173,6 @@ libraries that may require access to arbitrary files and sockets.
 [crypto-tls]: https://pkg.go.dev/crypto/tls
 [rfc7301]: https://datatracker.ietf.org/doc/html/rfc7301
 [curve-prefs]: https://pkg.go.dev/crypto/tls#Config.CurvePreferences
+[go127-mldsa]: https://go.dev/doc/go1.27#crypto_mldsa
 [landlock]: https://docs.kernel.org/userspace-api/landlock.html
 [tn3165]: https://developer.apple.com/documentation/technotes/tn3165-packet-filter-is-not-api

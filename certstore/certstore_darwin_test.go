@@ -70,11 +70,9 @@ func TestMacIdentityConcurrentSign(t *testing.T) {
 		digest := sha256.Sum256([]byte("ghostunnel"))
 
 		var wg sync.WaitGroup
-		for g := 0; g < goroutines; g++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for n := 0; n < iterations; n++ {
+		for range goroutines {
+			wg.Go(func() {
+				for range iterations {
 					if _, err := ident.Certificate(); err != nil {
 						t.Error(err)
 						return
@@ -88,7 +86,7 @@ func TestMacIdentityConcurrentSign(t *testing.T) {
 						t.Error(err)
 					}
 				}
-			}()
+			})
 		}
 		wg.Wait()
 	})
